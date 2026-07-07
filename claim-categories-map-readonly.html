@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claim Categories Map</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const CLAIMS = [
+  { name: "PRODUCT", color: "#4f6df5",
+    def: "Anything wrong with the product itself: fabric, colour, dimensions, assembly, quality, wrong product, or design.",
+    l2: [
+      { name: "FABRIC", def: "Defects in the fabric or upholstery surface.", l3: ["Sewing","Pilling","Wrinkles","Stain","Scratches","Holes"] },
+      { name: "COLOUR", def: "Delivered colour does not match what was ordered or expected.", l3: ["Don't match","Shade of colour"] },
+      { name: "DIMENSIONS", def: "Product size differs from what was ordered.", l3: ["Differ more than 4%","Differ less than 4%","Wrong dimensions"] },
+      { name: "ASSEMBLY", def: "Missing or defective assembly parts and elements (e.g. missing screws → Missing assembly elements).", l3: ["Connecting issue","Assembly element defect","Legs","Missing assembly elements","Missing pillows"] },
+      { name: "QUALITY", def: "Structural or build-quality defects — includes issues that surface after use (e.g. creaking after two weeks is still a Claim).", l3: ["Broken part","Broken product","Broken legs","Broken box","Broken armrest","Broken backrest","Broken springs","Broken wooden frame","Broken slats","Broken panel","Defective tabletop","Defective extensions","Filling issue","Construction issue","Creaking"] },
+      { name: "WRONG PRODUCT", def: "Wrong product shipped from the factory under the wrong reference. (If our warehouse picked the wrong item, use INTERNAL MISTAKE → WAREHOUSE → Mixed-up instead.)", l3: ["Factory"] },
+      { name: "DESIGN", def: "The product's design/shape does not match expectations.", l3: ["Shape"] }
+    ]},
+  { name: "TRANSPORT", color: "#0ea5a4",
+    def: "Damage, loss, or mix-up that happened in transit.",
+    l2: [
+      { name: "DAMAGE", def: "Damage that occurred during transport, to packaging or the product itself.", l3: ["Damaged packaging","Damaged cover","Damaged extensions","Damaged headboard","Damaged leg","Damaged panel","Damaged slats","Damaged soffit","Damaged tabletop","Damaged whole product","Damaged box","Hidden damage"] },
+      { name: "LOSS", def: "Order lost in transit, fully or partially.", l3: ["Full order lost","Partial order lost"] },
+      { name: "MIX-UP", def: "Wrong order delivered to the customer by the carrier.", l3: ["Wrong order delivered"] }
+    ]},
+  { name: "INTERNAL MISTAKE", color: "#e08b2e",
+    def: "Errors made by Sales, Warehouse, Buying, or Website teams, discovered post-delivery.",
+    l2: [
+      { name: "SALES", def: "Errors made by the Sales team (wrong reference, wrong dimensions, other).", l3: ["Reference","Dimensions","Other"] },
+      { name: "WAREHOUSE", def: "Warehouse errors — extra packages, mixed-up items, items forgotten at loading.", l3: ["Extra packages","Mixed-up","Forgot to load"] },
+      { name: "BUYING DEPARTMENT", def: "Errors in product data from the Buying department.", l3: ["Product dimensions","Wrong data"] },
+      { name: "WEBSITE", def: "Wrong information published on the website (e.g. order arrives with dimensions that differ from what the site showed because the site data was wrong).", l3: ["Reference","Dimensions","Other"] }
+    ]},
+  { name: "CLAIM ORDER", color: "#8a5cf6",
+    def: "Terminates at L1 — no subcategories. Used when the claim itself is the action: a re-order placed as a remedy.",
+    l2: [] }
+];
+
+const CC = [
+  { name: "Delivery / Logistics", color: "#4f6df5", def: "Everything related to getting the order to the customer — from pre-purchase delivery questions to active delivery problems.",
+    l2: [
+      ["Order status","Questions about order status between purchase and pickup from warehouse."],
+      ["Delivery - before purchase","Pre-purchase questions about delivery rules, services included, and delivery time."],
+      ["Delivery - after shipment","Delivery status questions from the moment of pickup from warehouse onward."],
+      ["Delivery - contact issue","Carrier asks us to verify the customer phone or address."],
+      ["Delivery - problem with service","Carrier did not perform a paid service (e.g. unpacking) or repeatedly scheduled and missed delivery appointments."],
+      ["Delay","We inform the customer about a delay in production or delivery."],
+      ["Delay - customer request","Customer asks to receive the product later than originally scheduled."]
+    ]},
+  { name: "Product / Pre-purchase", color: "#0ea5a4", def: "Questions asked before buying, plus closely related post-delivery information requests like missing assembly instructions.",
+    l2: [
+      ["Info on the product - web","Customer asks about info that is already visible on the website."],
+      ["Info on the product - missing","Customer asks about info that is not currently on the website."],
+      ["Need of samples","Customer requests a fabric sample shipment."],
+      ["Showroom/shops","Questions about physical shops or retailers."],
+      ["Stock availability","Will the product be restocked? Is it currently available?"],
+      ["Missing instructions","Customer did not receive assembly instructions with the delivery."]
+    ]},
+  { name: "Order / Change", color: "#e08b2e", def: "Modifications and cancellations to an existing order before delivery.",
+    l2: [
+      ["Cancellation before delivery","Customer requests cancellation, except cases involving Micadoni Money or change."],
+      ["Change - delivery address","Customer requests a change to the delivery address."],
+      ["Change - order/product","Customer wants to change colour, fabric, side, or dimensions after purchase (even if they ultimately cancel)."],
+      ["Change - invoice","Customer requests a data change on the invoice."]
+    ]},
+  { name: "Payment / Commercial", color: "#8a5cf6", def: "Money matters with no defect involved — discounts, payment processing, invoices, personalised quotations.",
+    l2: [
+      ["Discount request","Customer requests an additional discount."],
+      ["Payment issue","Customer reports a problem with payment processing."],
+      ["Request an invoice","Customer requests an invoice."],
+      ["Price difference","Customer requests a refund of a price difference."],
+      ["Request for offer","Individual offers for B2C clients in countries unavailable for delivery on the website."]
+    ]},
+  { name: "B2B / External", color: "#d5488f", def: "Inbound contacts that should be handled by another department or partner channel.",
+    l2: [
+      ["Micadoni Pro","Architects, interior designers, etc. requesting an offer; or existing MicadoniPro clients who did not receive a response from MicadoniPro."],
+      ["Partnership","B2B partners — shops, offers for other departments such as logistics."],
+      ["Collaboration","Influencers wanting to promote the brand in exchange for product or compensation."]
+    ]},
+  { name: "Returns", color: "#5a9e3d", def: "Standard returns within the 14-day legal window. Distinct from claims — no defect involved.",
+    l2: [["Return (within 14 days)","Customer wants to return a product within the legal return window. No defect involved."]] },
+  { name: "Technical", color: "#5b6472", def: "Issues with the website itself, not with an order.",
+    l2: [["Website issue","Configurator not working, products listed as available when out of stock, etc."]] },
+  { name: "Noise / Miscellaneous", color: "#9aa1ad", def: "Catch-all: aborted, dropped, language redirects, voicemail, spam, and uncategorisable contacts.",
+    l2: [["Other","Cases that do not fit into any of the other categories."],["SPAM","Filtered as spam."]] }
+];
+
+function claimsTree() {
+  return { name: "CLAIMS", color: "#1a1d23", def: "3-level taxonomy: what went wrong with a delivered order. 4 L1 · 15 L2 · 59 L3.", path: "Root",
+    children: CLAIMS.map(l1 => ({
+      name: l1.name, color: l1.color, def: l1.def, path: "Level 1",
+      children: l1.l2.map(l2 => ({
+        name: l2.name, color: l1.color, def: l2.def, path: `${l1.name} · Level 2`,
+        children: l2.l3.map(leaf => ({
+          name: leaf, color: l1.color, path: "Level 3 leaf",
+          def: `Full path: <b>${l1.name} → ${l2.name} → ${leaf}</b><br/>${l2.def}`, children: []
+        }))
+      }))
+    })) };
+}
+function ccTree() {
+  return { name: "CUSTOMER CARE", color: "#1a1d23", def: "2-level taxonomy: why the customer reached out. 8 L1 · 29 L2.", path: "Root",
+    children: CC.map(l1 => ({
+      name: l1.name, color: l1.color, def: l1.def, path: "Level 1",
+      children: l1.l2.map(([nm, def]) => ({
+        name: nm, color: l1.color, def, path: `${l1.name} · Level 2`, children: []
+      }))
+    })) };
+}
+
+function nodeW(label, fs) { return Math.round(label.length * fs * 0.58) + 20; }
+
+function layoutTree(root) {
+  const rowH = 23, st = { y: 20 };
+  (function layout(n, d) {
+    n.depth = d;
+    if (!n.children.length) { n.y = st.y; st.y += rowH; }
+    else {
+      n.children.forEach(c => layout(c, d + 1));
+      n.y = (n.children[0].y + n.children[n.children.length - 1].y) / 2;
+      if (d === 2) st.y += 5;
+      if (d === 1) st.y += 14;
+    }
+  })(root, 0);
+  const maxDepth = root.name === "CLAIMS" ? 3 : 2;
+  const X = maxDepth === 3 ? [10, 170, 360, 580] : [10, 190, 420];
+  let maxRight = 0;
+  const nodes = [], edges = [];
+  (function render(n, parent) {
+    const fs = n.depth === 0 ? 13 : n.depth === 1 ? 12 : 11;
+    const w = nodeW(n.name, fs), h = n.depth <= 1 ? 24 : 19;
+    n.x = X[n.depth]; n.w = w; n.h = h; n.fs = fs;
+    maxRight = Math.max(maxRight, n.x + w);
+    if (parent) {
+      const x1 = parent.x + parent.w, y1 = parent.y, x2 = n.x, y2 = n.y;
+      const mx = (x1 + x2) / 2;
+      edges.push({ d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`, color: n.color });
+    }
+    nodes.push(n);
+    n.children.forEach(c => render(c, n));
+  })(root, null);
+  return { nodes, edges, width: maxRight + 20, height: st.y + 10, maxDepth };
+}
+
+function CategoriesMap() {
+  const [view, setView] = useState("list");
+  const [taxo, setTaxo] = useState("claims");
+  const [tip, setTip] = useState(null);
+
+  const mind = useMemo(() => layoutTree(taxo === "claims" ? claimsTree() : ccTree()), [taxo]);
+
+  function moveTip(e, data) {
+    const pad = 14, w = 320;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+    if (y + 120 > window.innerHeight - 8) y = e.clientY - 120 - pad;
+    setTip({ ...data, x, y });
+  }
+
+  const btn = { border: "1px solid #d8dce3", background: "#fff", color: "#2a3140", padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+
+  return (
+    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', background: "#f7f8fa", color: "#1a1d23", padding: 24, lineHeight: 1.45, minHeight: "100vh" }}>
+      <header style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Claim &amp; Customer Care Categories Map</h1>
+        <div style={{ color: "#5b6472", fontSize: 13.5, marginTop: 4, maxWidth: 720 }}>
+          Hover over any category for its definition. Two independent taxonomies: <b>Claims</b> (3-level, what went wrong with a delivered order) and <b>Customer Care</b> (2-level, why the customer reached out).
+        </div>
+      </header>
+
+      <div style={{ display: "flex", gap: 8, margin: "18px 0 16px" }}>
+        {[["list", "List view"], ["mind", "Mind map"]].map(([k, label]) => (
+          <button key={k} onClick={() => setView(k)} style={{ ...btn, padding: "7px 16px", borderRadius: 20, fontSize: 13.5, ...(view === k ? { background: "#1a1d23", color: "#fff", borderColor: "#1a1d23" } : { color: "#444c59" }) }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {[["claims", "Claims (4 L1 · 15 L2 · 59 L3)"], ["cc", "Customer Care (8 L1 · 29 L2)"]].map(([k, label]) => (
+          <button key={k} onClick={() => setTaxo(k)} style={{ ...btn, padding: "5px 14px", borderRadius: 16, fontSize: 12.5, ...(taxo === k ? { background: "#4f6df5", color: "#fff", borderColor: "#4f6df5" } : { color: "#444c59" }) }}>{label}</button>
+        ))}
+      </div>
+
+      {view === "list" && taxo === "claims" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
+          {CLAIMS.map(l1 => {
+            const totalL3 = l1.l2.reduce((s, x) => s + x.l3.length, 0);
+            return (
+              <div key={l1.name} style={{ background: "#fff", border: "1px solid #e3e6eb", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 2px rgba(20,24,32,.04)" }}>
+                <div style={{ padding: "12px 14px", color: "#fff", background: l1.color, cursor: "default" }}
+                  onMouseEnter={e => moveTip(e, { path: "Claims · Level 1", title: l1.name, body: l1.def })}
+                  onMouseMove={e => moveTip(e, { path: "Claims · Level 1", title: l1.name, body: l1.def })}
+                  onMouseLeave={() => setTip(null)}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: ".3px" }}>{l1.name}</div>
+                  <div style={{ fontSize: 11.5, opacity: .85, marginTop: 2 }}>{l1.l2.length ? `${l1.l2.length} subcategories · ${totalL3} leaves` : "no subcategories — terminates at L1"}</div>
+                </div>
+                <div style={{ padding: "10px 12px 12px" }}>
+                  {!l1.l2.length && (
+                    <div style={{ border: "1px solid #e9ecf1", borderRadius: 8, padding: "8px 10px", background: "#fbfcfd" }}>
+                      <span style={{ fontSize: 12, color: "#5b6472" }}>{l1.def}</span>
+                    </div>
+                  )}
+                  {l1.l2.map(l2 => (
+                    <div key={l2.name} style={{ border: "1px solid #e9ecf1", borderRadius: 8, padding: "8px 10px", marginBottom: 8, background: "#fbfcfd" }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: l1.color, cursor: "default", display: "inline-block", padding: "1px 2px", borderRadius: 4 }}
+                        onMouseEnter={e => moveTip(e, { path: `Claims · ${l1.name} · Level 2`, title: l2.name, body: l2.def })}
+                        onMouseMove={e => moveTip(e, { path: `Claims · ${l1.name} · Level 2`, title: l2.name, body: l2.def })}
+                        onMouseLeave={() => setTip(null)}>{l2.name}</span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                        {l2.l3.map(leaf => (
+                          <span key={leaf} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: "#eef1f6", color: "#3c4454", cursor: "default", border: "1px solid transparent" }}
+                            onMouseEnter={e => moveTip(e, { path: "Claims · Level 3 leaf", title: leaf, body: `Full path: <b>${l1.name} → ${l2.name} → ${leaf}</b><br/>${l2.def}` })}
+                            onMouseMove={e => moveTip(e, { path: "Claims · Level 3 leaf", title: leaf, body: `Full path: <b>${l1.name} → ${l2.name} → ${leaf}</b><br/>${l2.def}` })}
+                            onMouseLeave={() => setTip(null)}>{leaf}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {view === "list" && taxo === "cc" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
+          {CC.map(l1 => (
+            <div key={l1.name} style={{ background: "#fff", border: "1px solid #e3e6eb", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 2px rgba(20,24,32,.04)" }}>
+              <div style={{ padding: "12px 14px", color: "#fff", background: l1.color, cursor: "default" }}
+                onMouseEnter={e => moveTip(e, { path: "Customer Care · Level 1", title: l1.name, body: l1.def })}
+                onMouseMove={e => moveTip(e, { path: "Customer Care · Level 1", title: l1.name, body: l1.def })}
+                onMouseLeave={() => setTip(null)}>
+                <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: ".3px" }}>{l1.name}</div>
+                <div style={{ fontSize: 11.5, opacity: .85, marginTop: 2 }}>{l1.l2.length} sub-categor{l1.l2.length === 1 ? "y" : "ies"}</div>
+              </div>
+              <div style={{ padding: "10px 12px 12px" }}>
+                {l1.l2.map(([nm, def]) => (
+                  <div key={nm} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "default" }}
+                    onMouseEnter={e => moveTip(e, { path: `Customer Care · ${l1.name} · Level 2`, title: nm, body: def })}
+                    onMouseMove={e => moveTip(e, { path: `Customer Care · ${l1.name} · Level 2`, title: nm, body: def })}
+                    onMouseLeave={() => setTip(null)}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", flex: "none", background: l1.color }} />
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: "#2a3140" }}>{nm}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === "mind" && (
+        <div>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ fontSize: 11.5, color: "#8a93a3" }}>Hover over any node for its full definition</span>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #e3e6eb", borderRadius: 12, boxShadow: "0 1px 2px rgba(20,24,32,.04)", overflow: "auto", padding: 12 }}>
+            <svg width={mind.width} height={mind.height} xmlns="http://www.w3.org/2000/svg" style={{ fontFamily: "inherit" }}>
+              {mind.edges.map((e, i) => (
+                <path key={i} d={e.d} fill="none" stroke={e.color} strokeWidth={1.4} opacity={0.45} />
+              ))}
+              {mind.nodes.map((n, i) => {
+                const taxLabel = taxo === "claims" ? "Claims" : "Customer Care";
+                let rectFill, rectStroke, textFill;
+                if (n.depth === 0) { rectFill = "#1a1d23"; rectStroke = "#1a1d23"; textFill = "#fff"; }
+                else if (n.depth === 1) { rectFill = n.color; rectStroke = n.color; textFill = "#fff"; }
+                else if (n.depth === 2 && mind.maxDepth === 3) { rectFill = "#fff"; rectStroke = n.color; textFill = n.color; }
+                else { rectFill = "#eef1f6"; rectStroke = "#dde2ea"; textFill = "#3c4454"; }
+                const tipData = { path: `${taxLabel} · ${n.path}`, title: n.name, body: n.def };
+                return (
+                  <g key={i} style={{ cursor: "default" }}
+                    onMouseEnter={e => moveTip(e, tipData)}
+                    onMouseMove={e => moveTip(e, tipData)}
+                    onMouseLeave={() => setTip(null)}>
+                    <rect x={n.x} y={n.y - n.h / 2} width={n.w} height={n.h} rx={n.h / 2} fill={rectFill} stroke={rectStroke} strokeWidth={1} />
+                    <text x={n.x + n.w / 2} y={n.y} textAnchor="middle" dominantBaseline="central" fontSize={n.fs}
+                      fontWeight={n.depth <= 1 ? 700 : n.depth === 2 && mind.maxDepth === 3 ? 700 : 500} fill={textFill}>{n.name}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {tip && (
+        <div style={{ position: "fixed", zIndex: 99, maxWidth: 320, background: "#1a1d23", color: "#f2f4f8", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5, boxShadow: "0 6px 20px rgba(0,0,0,.25)", pointerEvents: "none", left: tip.x, top: tip.y }}>
+          {tip.path && <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", opacity: .65, marginBottom: 4 }}>{tip.path}</div>}
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 3 }}>{tip.title}</div>
+          <div dangerouslySetInnerHTML={{ __html: tip.body }} />
+        </div>
+      )}
+
+      <footer style={{ marginTop: 18, fontSize: 11.5, color: "#8a93a3" }}>
+        Source: Categories Reference document · Claims owner: Patrycja Opulska · Customer Care owner: Magdalena Balcerska
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<CategoriesMap />);
+</script>
+</body>
+</html>
